@@ -76,23 +76,20 @@ jobs:
           cp app/build/outputs/apk/release/*.apk artifacts/ || true
 
       # ==== changelog из коммитов между тегами ====
-      - name: Generate changelog
+      - name: Generate changelog from commits
         id: changelog
         uses: mikepenz/release-changelog-builder-action@v5
         with:
-          fromTag: ${{ env.latest_tag }}   # может быть пустым — ок
+          fromTag: ${{ env.latest_tag }}   # можно оставить пустым на первый релиз
           toTag:   ${{ env.next_tag }}
           configurationJson: |
             {
-              "categories": [
-                { "title": "🚀 Features", "labels": ["feature", "enhancement"] },
-                { "title": "🐛 Fixes",    "labels": ["fix", "bug"] },
-                { "title": "🧰 Chore",    "labels": ["chore"] }
-              ],
-              "template": "{{CHANGELOG}}"
+              "mode": "COMMIT",
+              "template": "#{{CHANGELOG}}"
             }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
 
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2

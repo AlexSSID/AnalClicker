@@ -8,6 +8,7 @@ plugins {
 }
 
 android {
+
     namespace = "ru.byksar.analclicker"
     compileSdk {
         version = release(36)
@@ -18,7 +19,7 @@ android {
         minSdk = 33
         targetSdk = 36
         versionCode = 1
-        versionName = "1.0.0"
+        versionName = "0.0.2"
 
         testInstrumentationRunner = "androidx.test.runner.AndroidJUnitRunner"
     }
@@ -43,6 +44,7 @@ android {
     }
     buildFeatures {
         compose = true
+        buildConfig = true
     }
 }
 
@@ -51,7 +53,7 @@ android {
 dependencies {
     implementation("com.github.alorma.compose-settings:ui-tiles:2.13.0")
     implementation("com.github.alorma.compose-settings:ui-tiles-extended-android:2.13.0")
-
+    implementation("io.github.g00fy2:versioncompare:1.5.0")
 
     implementation(libs.compose.shimmer)
     implementation(libs.androidx.core.splashscreen)

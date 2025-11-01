@@ -7,6 +7,7 @@ import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.setValue
 import androidx.lifecycle.AndroidViewModel
 import androidx.lifecycle.viewModelScope
+import io.github.g00fy2.versioncompare.Version
 import kotlinx.coroutines.launch
 import ru.byksar.analclicker.simpleapi.ApiClient
 
@@ -44,6 +45,11 @@ class SettingsViewModel(application: Application ) : AndroidViewModel(applicatio
         }
 
     }
+
+    fun IsUpdateAvalilabe(currentVersion: String, otherVersion: String): Boolean {
+        return Version(currentVersion) < Version(otherVersion)
+    }
+
 
 
 }

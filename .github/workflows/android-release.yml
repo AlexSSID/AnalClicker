@@ -1,10 +1,10 @@
 name: Manual Android Release
 
 on:
-  workflow_dispatch:   # ручной запуск
+  workflow_dispatch:   # только ручной запуск
 
 permissions:
-  contents: write
+  contents: write      # нужно для тегов и релизов
 
 jobs:
   build:
@@ -14,32 +14,34 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0
+          fetch-depth: 0   # полный git-лог
 
+      # ==== авто-теггинг: +0.0.1 ====
       - name: Get latest tag
-        id: get_latest_tag
+        id: latest
         run: |
           git fetch --tags
           latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           echo "latest_tag=$latest_tag" >> $GITHUB_ENV
 
-      - name: Calculate next tag (patch +0.0.1)
-        id: next_tag
+      - name: Calculate next tag
+        id: next
         run: |
-          base_tag=${{ env.latest_tag }}
-          if [ -z "$base_tag" ]; then base_tag="0.0.0"; fi
-          IFS='.' read -r major minor patch <<<"$base_tag"
+          base="${{ env.latest_tag }}"
+          if [ -z "$base" ]; then base="0.0.0"; fi
+          IFS='.' read -r major minor patch <<<"$base"
           next_tag="$major.$minor.$((patch + 1))"
           echo "next_tag=$next_tag" >> $GITHUB_ENV
-          echo "Latest: ${base_tag:-<none>} -> Next: $next_tag"
+          echo "Latest: ${base:-<none>} -> Next: $next_tag"
 
-      - name: Create and push new tag
+      - name: Create and push tag
         run: |
           git config user.name "${{ github.actor }}"
           git config user.email "${{ github.actor }}@users.noreply.github.com"
           git tag ${{ env.next_tag }}
           git push origin ${{ env.next_tag }}
 
+      # ==== сборка ====
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@v2
 
@@ -58,6 +60,9 @@ jobs:
       - name: Set up Gradle (cache)
         uses: gradle/actions/setup-gradle@v3
 
+      - name: Make gradlew executable
+        run: chmod +x ./gradlew
+
       - name: Build Release (APK + AAB)
         run: |
           ./gradlew --no-daemon clean \
@@ -70,18 +75,19 @@ jobs:
           cp app/build/outputs/apk/release/*.apk artifacts/ || true
           cp app/build/outputs/bundle/release/*.aab artifacts/ || true
 
-      - name: Generate changelog from commits
+      # ==== changelog из коммитов между тегами ====
+      - name: Generate changelog
         id: changelog
         uses: mikepenz/release-changelog-builder-action@v5
         with:
-          fromTag: ${{ env.latest_tag }}   # может быть пустым — это ок
-          toTag: ${{ env.next_tag }}
+          fromTag: ${{ env.latest_tag }}   # может быть пустым — ок
+          toTag:   ${{ env.next_tag }}
           configurationJson: |
             {
               "categories": [
                 { "title": "🚀 Features", "labels": ["feature", "enhancement"] },
-                { "title": "🐛 Fixes", "labels": ["fix", "bug"] },
-                { "title": "🧰 Chore", "labels": ["chore"] }
+                { "title": "🐛 Fixes",    "labels": ["fix", "bug"] },
+                { "title": "🧰 Chore",    "labels": ["chore"] }
               ],
               "template": "{{CHANGELOG}}"
             }
@@ -91,9 +97,9 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ env.next_tag }}
+          name:    ${{ env.next_tag }}
           tag_name: ${{ env.next_tag }}
-          body: ${{ steps.changelog.outputs.changelog }}
+          body:    ${{ steps.changelog.outputs.changelog }}
           files: |
             artifacts/*.apk
             artifacts/*.aab

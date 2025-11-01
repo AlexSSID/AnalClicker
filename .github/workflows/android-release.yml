@@ -1,10 +1,10 @@
 name: Manual Android Release
 
 on:
-  workflow_dispatch:   # ручной запуск через GitHub UI
+  workflow_dispatch:   # ручной запуск
 
 permissions:
-  contents: write   # нужно для создания релиза
+  contents: write   # нужно для управления тэгами и релизами
 
 jobs:
   build:
@@ -14,7 +14,30 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # все коммиты для changelog
+          fetch-depth: 0   # нужен полный git-лог для тегов/чейнджлога
+
+      - name: Get latest tag
+        id: get_latest_tag
+        run: |
+          git fetch --tags
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          echo "latest_tag=$latest_tag" >> $GITHUB_ENV
+
+      - name: Calculate next tag
+        id: next_tag
+        run: |
+          echo "Latest tag: ${{ env.latest_tag }}"
+          IFS='.' read -r major minor patch <<<"${{ env.latest_tag }}"
+          next_tag="$major.$minor.$((patch + 1))"
+          echo "next_tag=$next_tag" >> $GITHUB_ENV
+          echo "Next tag: $next_tag"
+
+      - name: Create and push new tag
+        run: |
+          git config user.name "${{ github.actor }}"
+          git config user.email "${{ github.actor }}@users.noreply.github.com"
+          git tag ${{ env.next_tag }}
+          git push origin ${{ env.next_tag }}
 
       - name: Validate Gradle Wrapper
         uses: gradle/wrapper-validation-action@v2
@@ -50,6 +73,8 @@ jobs:
         id: changelog
         uses: mikepenz/release-changelog-builder-action@v5
         with:
+          fromTag: ${{ env.latest_tag }}
+          toTag: ${{ env.next_tag }}
           configurationJson: |
             {
               "categories": [
@@ -65,8 +90,8 @@ jobs:
       - name: Create GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          name: ${{ github.ref_name }}
-          tag_name: ${{ github.ref_name }}
+          name: ${{ env.next_tag }}
+          tag_name: ${{ env.next_tag }}
           body: ${{ steps.changelog.outputs.changelog }}
           files: |
             artifacts/*.apk

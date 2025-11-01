@@ -1,5 +1,7 @@
 package ru.byksar.analclicker
 
+import android.app.DownloadManager
+import android.content.Context
 import androidx.compose.animation.AnimatedContent
 import androidx.compose.animation.AnimatedContentTransitionScope
 import androidx.compose.animation.AnimatedVisibility
@@ -12,9 +14,7 @@ import androidx.compose.animation.core.spring
 import androidx.compose.animation.core.tween
 import androidx.compose.animation.fadeIn
 import androidx.compose.animation.fadeOut
-import androidx.compose.animation.slideInHorizontally
 import androidx.compose.animation.slideInVertically
-import androidx.compose.animation.slideOutHorizontally
 import androidx.compose.animation.slideOutVertically
 import androidx.compose.animation.with
 import androidx.compose.foundation.gestures.Orientation
@@ -89,7 +89,7 @@ import ru.byksar.analclicker.utlis.TopBarViewModel
 
 @OptIn(ExperimentalMaterial3Api::class)
 @Composable
-fun MainApp(mainNavController: NavController) {
+fun MainApp(mainNavController: NavController, mainService: MainActivity) {
     val homeTab = TabBarItem(title = "Home", unselectedIcon = Icons.Outlined.Home, selectedIcon = Icons.Default.Home)
     val boosterTab = TabBarItem(title = "Boosters", unselectedIcon = Icons.Outlined.Build, selectedIcon = Icons.Default.Build)
     val aboutTab = TabBarItem(title = "About", unselectedIcon = Icons.Outlined.Info, selectedIcon = Icons.Default.Info )
@@ -100,6 +100,8 @@ fun MainApp(mainNavController: NavController) {
     val aboutViewModel: AboutViewModel = viewModel()
     val topBarViewModel: TopBarViewModel = viewModel()
     val settingsViewModel: SettingsViewModel = viewModel()
+
+    var downloadManager = mainService.getSystemService(Context.DOWNLOAD_SERVICE) as DownloadManager
 
     val navController = rememberNavController()
     val navBackStackEntry by navController.currentBackStackEntryAsState()
@@ -136,7 +138,7 @@ fun MainApp(mainNavController: NavController) {
                 composable(boosterTab.title) { BoostersPage(clickerViewModel = clickerViewModel, topBarViewModel = topBarViewModel) }
                 composable(aboutTab.title) { AboutPage(viewModel = aboutViewModel) }
                 composable(settingsTab.title) {
-                    SettingsPage(mainNavController, settingsViewModel = settingsViewModel )
+                    SettingsPage(mainNavController, settingsViewModel = settingsViewModel, mainService = mainService)
                 }
                 composable(
                     route = "SettingsListPage",

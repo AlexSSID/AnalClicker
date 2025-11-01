@@ -4,7 +4,7 @@ on:
   workflow_dispatch:   # ручной запуск
 
 permissions:
-  contents: write   # нужно для управления тэгами и релизами
+  contents: write
 
 jobs:
   build:
@@ -14,23 +14,24 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # нужен полный git-лог для тегов/чейнджлога
+          fetch-depth: 0
 
       - name: Get latest tag
         id: get_latest_tag
         run: |
           git fetch --tags
-          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "0.0.0")
+          latest_tag=$(git describe --tags --abbrev=0 2>/dev/null || echo "")
           echo "latest_tag=$latest_tag" >> $GITHUB_ENV
 
-      - name: Calculate next tag
+      - name: Calculate next tag (patch +0.0.1)
         id: next_tag
         run: |
-          echo "Latest tag: ${{ env.latest_tag }}"
-          IFS='.' read -r major minor patch <<<"${{ env.latest_tag }}"
+          base_tag=${{ env.latest_tag }}
+          if [ -z "$base_tag" ]; then base_tag="0.0.0"; fi
+          IFS='.' read -r major minor patch <<<"$base_tag"
           next_tag="$major.$minor.$((patch + 1))"
           echo "next_tag=$next_tag" >> $GITHUB_ENV
-          echo "Next tag: $next_tag"
+          echo "Latest: ${base_tag:-<none>} -> Next: $next_tag"
 
       - name: Create and push new tag
         run: |
@@ -65,15 +66,15 @@ jobs:
 
       - name: Collect artifacts
         run: |
-            mkdir -p artifacts
-            cp app/build/outputs/apk/release/*.apk artifacts/ || true
-            cp app/build/outputs/bundle/release/*.aab artifacts/ || true
+          mkdir -p artifacts
+          cp app/build/outputs/apk/release/*.apk artifacts/ || true
+          cp app/build/outputs/bundle/release/*.aab artifacts/ || true
 
       - name: Generate changelog from commits
         id: changelog
         uses: mikepenz/release-changelog-builder-action@v5
         with:
-          fromTag: ${{ env.latest_tag }}
+          fromTag: ${{ env.latest_tag }}   # может быть пустым — это ок
           toTag: ${{ env.next_tag }}
           configurationJson: |
             {
@@ -82,7 +83,7 @@ jobs:
                 { "title": "🐛 Fixes", "labels": ["fix", "bug"] },
                 { "title": "🧰 Chore", "labels": ["chore"] }
               ],
-              "template": "${{CHANGELOG}}"
+              "template": "{{CHANGELOG}}"
             }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}

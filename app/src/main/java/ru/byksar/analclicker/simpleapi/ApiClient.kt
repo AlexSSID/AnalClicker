@@ -25,7 +25,7 @@ class ApiClient() {
 
     suspend fun getAppVersion(): VersionModel? {
         try {
-            val response = httpClient.get("https://api.github.com/repos/jetbrains/kotlin/releases/latest")
+            val response = httpClient.get("https://api.github.com/repos/alexssid/analclicker/releases/latest")
             return response.body<VersionModel>()
         } catch (e: Exception) {
             return null

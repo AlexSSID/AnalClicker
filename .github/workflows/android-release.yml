@@ -1,15 +1,10 @@
-name: Android CI + Auto Release
+name: Manual Android Release
 
 on:
-  push:
-    branches: [ master, main ]
-  pull_request:
-    branches: [ master, main ]
-  workflow_dispatch:
+  workflow_dispatch:   # ручной запуск через GitHub UI
 
 permissions:
-  contents: write   # нужно для создания тэгов и релизов
-  actions: read
+  contents: write   # нужно для создания релиза
 
 jobs:
   build:
@@ -19,128 +14,64 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
         with:
-          fetch-depth: 0   # важно: нужны тэги и история для changelog
+          fetch-depth: 0   # все коммиты для changelog
+
+      - name: Validate Gradle Wrapper
+        uses: gradle/wrapper-validation-action@v2
 
       - name: Set up JDK 17
         uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: 17
-          cache: gradle
+          java-version: "17"
 
       - name: Set up Android SDK
         uses: android-actions/setup-android@v3
         with:
-          packages: |
-            platforms;android-33
-            build-tools;34.0.0
-            platform-tools
+          api-level: 34
+          build-tools: "34.0.0"
 
-      - name: Make gradlew executable
-        run: chmod +x ./gradlew
+      - name: Set up Gradle (cache)
+        uses: gradle/actions/setup-gradle@v3
 
-      - name: Build & test (Debug)
-        run: ./gradlew clean build --stacktrace
-
-      - name: Build Release (unsigned)
-        run: ./gradlew assembleRelease --stacktrace
-
-      - name: Upload Debug artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-debug
-          path: |
-            app/build/outputs/apk/**/debug/*.apk
-            app/build/outputs/bundle/**/debug/*.aab
-          if-no-files-found: warn
-
-      - name: Upload Release artifacts
-        if: always()
-        uses: actions/upload-artifact@v4
-        with:
-          name: app-release
-          path: |
-            app/build/outputs/apk/**/release/*.apk
-            app/build/outputs/bundle/**/release/*.aab
-          if-no-files-found: warn
-
-  release:
-    needs: build
-    runs-on: ubuntu-latest
-    if: github.event_name == 'push' && (github.ref == 'refs/heads/master' || github.ref == 'refs/heads/main')
-
-    steps:
-      - name: Checkout
-        uses: actions/checkout@v4
-        with:
-          fetch-depth: 0
-
-      - name: Download Release artifacts
-        uses: actions/download-artifact@v4
-        with:
-          name: app-release
-          path: dist
-
-      - name: Compute next tag (patch +0.0.1)
-        id: bump
-        shell: bash
+      - name: Build Release (APK + AAB)
         run: |
-          git fetch --tags --force
-          LAST_TAG=$(git tag -l 'v*' --sort=-v:refname | head -n1)
-          if [ -z "$LAST_TAG" ]; then
-            LAST_TAG="v0.0.0"
-          fi
-          ver="${LAST_TAG#v}"
-          IFS='.' read -r MAJOR MINOR PATCH <<<"$ver"
-          PATCH=$((PATCH+1))
-          NEXT_TAG="v${MAJOR}.${MINOR}.${PATCH}"
-          echo "last_tag=$LAST_TAG" >> $GITHUB_OUTPUT
-          echo "next_tag=$NEXT_TAG" >> $GITHUB_OUTPUT
+          ./gradlew --no-daemon clean \
+            :app:assembleRelease \
+            :app:bundleRelease
 
-      - name: Generate changelog
+      - name: Collect artifacts
+        run: |
+            mkdir -p artifacts
+            cp app/build/outputs/apk/release/*.apk artifacts/ || true
+            cp app/build/outputs/bundle/release/*.aab artifacts/ || true
+
+      - name: Generate changelog from commits
         id: changelog
-        shell: bash
-        run: |
-          LAST_TAG="${{ steps.bump.outputs.last_tag }}"
-          if [ "$LAST_TAG" = "v0.0.0" ]; then
-            RANGE=""
-          else
-            RANGE="${LAST_TAG}..HEAD"
-          fi
-          {
-            echo "## Changelog for ${{ steps.bump.outputs.next_tag }}"
-            echo
-            if [ -n "$RANGE" ]; then
-              git log --pretty=format:'- %s (%h)' $RANGE
-            else
-              git log --pretty=format:'- %s (%h)'
-            fi
-            echo
-            echo "_Generated on $(date -u +"%Y-%m-%d %H:%M UTC")_"
-          } > RELEASE_NOTES.md
-          echo "notes<<EOF" >> $GITHUB_OUTPUT
-          cat RELEASE_NOTES.md >> $GITHUB_OUTPUT
-          echo "EOF" >> $GITHUB_OUTPUT
-
-      - name: Create GitHub Release (with notes)
+        uses: mikepenz/release-changelog-builder-action@v5
+        with:
+          configurationJson: |
+            {
+              "categories": [
+                { "title": "🚀 Features", "labels": ["feature", "enhancement"] },
+                { "title": "🐛 Fixes", "labels": ["fix", "bug"] },
+                { "title": "🧰 Chore", "labels": ["chore"] }
+              ],
+              "template": "${{CHANGELOG}}"
+            }
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          # Создаём релиз и тэг; укажем target на текущую ревизию
-          gh release create "${{ steps.bump.outputs.next_tag }}" \
-            --title "${{ steps.bump.outputs.next_tag }}" \
-            --notes-file RELEASE_NOTES.md \
-            --target "${GITHUB_SHA}"
 
-      - name: Upload assets to Release
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          name: ${{ github.ref_name }}
+          tag_name: ${{ github.ref_name }}
+          body: ${{ steps.changelog.outputs.changelog }}
+          files: |
+            artifacts/*.apk
+            artifacts/*.aab
+          draft: false
+          prerelease: false
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        run: |
-          shopt -s nullglob
-          files=(dist/**/*.apk dist/**/*.aab)
-          if [ ${#files[@]} -eq 0 ]; then
-            echo "No release artifacts found in dist/"
-            exit 1
-          fi
-          gh release upload "${{ steps.bump.outputs.next_tag }}" "${files[@]}" --clobber

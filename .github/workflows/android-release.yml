@@ -65,17 +65,15 @@ jobs:
       - name: Make gradlew executable
         run: chmod +x ./gradlew
 
-      - name: Build Release (APK + AAB)
+      - name: Build Release (APK only)
         run: |
           ./gradlew --no-daemon clean \
-            :app:assembleRelease \
-            :app:bundleRelease
+            :app:assembleRelease
 
       - name: Collect artifacts
         run: |
           mkdir -p artifacts
           cp app/build/outputs/apk/release/*.apk artifacts/ || true
-          cp app/build/outputs/bundle/release/*.aab artifacts/ || true
 
       # ==== changelog из коммитов между тегами ====
       - name: Generate changelog
@@ -104,7 +102,6 @@ jobs:
           body:    ${{ steps.changelog.outputs.changelog }}
           files: |
             artifacts/*.apk
-            artifacts/*.aab
           draft: false
           prerelease: false
         env:
